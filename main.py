@@ -3,15 +3,12 @@ import sqlite3
 import asyncio
 import sys
 import pandas as pd
-import numpy as np
-from os import getenv
 from aiogram import Bot, Dispatcher, Router, types
 from aiogram.utils.keyboard import *
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery
-from aiogram.utils.markdown import hbold
-from aiogram import F
+
 with open(r'token.txt') as q:
     API_TOKEN = q.readline().strip()
 dp = Dispatcher()
@@ -114,7 +111,7 @@ async def command_start_handler(message: Message) -> None:
         await message.reply(
             "Привет! Давай начнём регистрацию заново!" +
             "\n" +
-            "Выбери предметы, которые планируешь сдавать",
+            "Выбери предметы, которые планируешь сдавать: ",
             reply_markup=subject_buttons.as_markup())
         try:
             cursor.execute(f'''UPDATE user SET subjects = ?, subjects_mark = ? WHERE id = ?''', (None, None, user_id))
@@ -142,7 +139,6 @@ async def set_subject(callback_query: CallbackQuery):
         users_subj = list(map(int, users_subj.split()))
         if selected_subj not in users_subj:
             users_subj.append(selected_subj)
-            users_subj.sort()
             cursor.execute(update_subjects_query, (' '.join(list(map(str, users_subj))), user_id))
             markup = await add_subj(callback_query, selected_subj)
             await callback_query.message.edit_reply_markup(
@@ -152,7 +148,6 @@ async def set_subject(callback_query: CallbackQuery):
             db.commit()
         else:
             users_subj.remove(selected_subj)
-            users_subj.sort()
             cursor.execute(update_subjects_query, (' '.join(list(map(str, users_subj))), user_id))
             markup = await remove_subj(callback_query, selected_subj)
             await callback_query.message.edit_reply_markup(
@@ -267,7 +262,6 @@ async def get_universities(message: Message):
     user_subj = user[-2]
     user_mark = user[-1]
     query = 'SELECT * from university'
-    df = pd.read_sql_query(query, db)
     if user_mark is None or user_subj is None:
         await message.reply(
             text='Пожалуйста пройдите регистрацию заново, используя команду /start'
@@ -288,12 +282,17 @@ async def get_universities(message: Message):
             subjects_mark = univer[5]
             minimum_last = univer[6]
             link = univer[7]
-            if sum(list(map(int, user_mark))) * 10 + 10 >= minimum_last and set(subj_list).issubset(set(user_subj)):
+            if set(subj_list).issubset(set(user_subj)):
                 flag = True
+                summ = 0
                 for idx in subj_list:
                     if idx not in user_subj and user_mark[user_subj.index(idx)] < subjects_mark[subj_list.index(idx)]:
                         flag = False
                         break
+                    else:
+                        summ += 10 * user_mark[user_subj.index(idx)]
+                if summ + 10 < minimum_last:
+                    flag = False
                 if flag:
                     text += f'ВУЗ: {name_univer}' + '\n' + f'Направление: {name_napr}' + '\n'
                     text += f'Платно: {'Да' if platno == 'True' else 'Нет'}' + '\n'
